@@ -55,7 +55,7 @@ spec:
         app: webhooksrv
     spec:
       containers:
-      - image: webhooksrv:1.0
+      - image: hyrsh/k8s-webhook-server:1.0
         name: webhooksrv
         ports:
         - containerPort: 443
