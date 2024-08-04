@@ -1,0 +1,120 @@
+apiVersion: v1
+data:
+  config.yml: |
+    webhookserver:
+      settings:
+        listenport: 443
+        debug-logs: false
+      security:
+        root-ca-dir: ./webhook-server/root-ca-dir
+        int-ca-dir: ./webhook-server/int-ca-dir
+        pub-cert-pool-dir: ./webhook-server/pub-cert-pool-dir
+        server-cert-dir: ./webhook-server/server-cert-dir
+        temp-cert-dir: ./webhook-server/temp-cert-dir
+        eternity-dir: ./webhook-server/eternity-dir
+        ca-type: ecdsa
+        ca-strength: p256
+        dns-alt-names:
+        - webhook-server-svc.webhook-hub.svc
+        - webhook-server-svc.webhook-hub.svc.cluster.local
+        ip-alt-names:
+        - 127.0.0.1
+        allowed-accounts:
+        - system:serviceaccount:kube-system:default
+      kubernetes:
+        namespace: webhook-hub
+        configmap: webhook-server-cm
+        secret: webhook-server-sec
+        service-name: webhook-server-svc
+        auto-eternity: false
+kind: ConfigMap
+metadata:
+  name: webhook-server-cm
+  namespace: webhook-hub
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: webhooksrv
+  name: webhooksrv
+  namespace: webhook-hub
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: webhooksrv
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: webhooksrv
+    spec:
+      containers:
+      - image: webhooksrv:1.0
+        name: webhooksrv
+        ports:
+        - containerPort: 443
+        env:
+        - name: WHS_K8S_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        volumeMounts:
+        - name: config
+          mountPath: "./config.yml"
+          subPath: "config.yml"
+          readOnly: false
+        - name: certs
+          mountPath: "./kubernetes-certs"
+          readOnly: false
+      volumes:
+      - name: config
+        projected:
+          defaultMode: 0777
+          sources:
+          - configMap:
+              name: webhook-server-cm
+              optional: true
+      - name: certs
+        projected:
+          defaultMode: 0777
+          sources:
+          - secret:
+              name: webhook-server-sec
+              optional: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: webhooksrv
+  name: webhook-server-svc
+  namespace: webhook-hub
+spec:
+  ports:
+  - port: 443
+    protocol: TCP
+    targetPort: 443
+  selector:
+    app: webhooksrv
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  annotations:
+    rbac.authorization.kubernetes.io/autoupdate: "true"
+  name: cluster-admin
+  namespace: webhook-hub
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- kind: ServiceAccount
+  name: default
+  namespace: webhook-hub
