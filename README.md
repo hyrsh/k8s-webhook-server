@@ -13,7 +13,8 @@ As of now it only serves audit validations and denials but it is highly customiz
 
 #### Usage
 
-- Create a deployment with respective configmap (see ./deployment directory) to fit your needs
+- Create a user with RBAC permissions to handle ValidatingWebhookConfigurations
+- Create a deployment with respective configmap (see ./deployment directory) to fit your needs (change the serviceAccount to your enabled account)
 - Start the deployment and get the caBundle value from the self-creating ValidatingWebhookConfiguration called "mywebhook.template.io"
 - Create a ValidatingWebhookConfiguration with the caBundle value you got and adjust rules to your need
 
