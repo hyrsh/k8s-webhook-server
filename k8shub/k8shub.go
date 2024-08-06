@@ -152,10 +152,12 @@ func CreateTemplateValidationConfig() bool {
 		loghub.Out(2, err.Error(), false)
 		exists = false
 		vConf = nil
-		vConf = getEmptyValidationConf(whname)
+		vConf = getEmptyValidationConf(whname) //always get a new "default" config to keep caBundle up-to-date
 	}
+
 	if exists {
-		_, updateErr := client.AdmissionregistrationV1().ValidatingWebhookConfigurations().Update(context.TODO(), vConf, metav1.UpdateOptions{})
+		updatedConf := updateCABundle(vConf)
+		_, updateErr := client.AdmissionregistrationV1().ValidatingWebhookConfigurations().Update(context.TODO(), updatedConf, metav1.UpdateOptions{})
 		if updateErr != nil {
 			loghub.Out(2, "Update CALL", false)
 			loghub.Out(2, updateErr.Error(), false)
@@ -185,6 +187,63 @@ func deleteSelf(config *rest.Config, podname string, ns string) {
 	if deleteErr != nil {
 		log.Println("Could not delete self")
 	}
+}
+
+func updateCABundle(conf *v1.ValidatingWebhookConfiguration) *v1.ValidatingWebhookConfiguration {
+	//template variables
+	var webhooks []v1.ValidatingWebhook
+	var uConf v1.ValidatingWebhook
+
+	var sideeffects v1.SideEffectClass
+	sideeffects = "None"
+
+	var timeout int32
+	timeout = 5
+
+	var port int32
+	port = int32(configstruct.CurrentConfig.WebhookServer.Settings.Listenport)
+
+	var path string
+	path = "/audit-user"
+
+	//main settings
+	uConf.AdmissionReviewVersions = []string{"v1"}
+	uConf.SideEffects = &sideeffects
+	uConf.TimeoutSeconds = &timeout
+
+	var cservice v1.ServiceReference
+	cservice.Name = configstruct.CurrentConfig.WebhookServer.Kubernetes.ServiceName
+	cservice.Namespace = configstruct.CurrentConfig.WebhookServer.Kubernetes.Namespace
+	cservice.Port = &port
+	cservice.Path = &path
+
+	var cconf v1.WebhookClientConfig
+	cconf.Service = &cservice
+	cconf.CABundle = configstruct.BytePublicChain
+
+	uConf.ClientConfig = cconf
+	uConf.Name = conf.Webhooks[0].Name
+
+	//write webhook element to array
+	webhooks = append(webhooks, uConf)
+
+	var cfgraw v1.ValidatingWebhookConfiguration
+	cfgraw = *conf
+
+	cfgraw = v1.ValidatingWebhookConfiguration{
+
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ValidatingWebhookConfiguration",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            conf.ObjectMeta.Name,
+			Namespace:       conf.ObjectMeta.Namespace,
+			ResourceVersion: conf.ObjectMeta.ResourceVersion,
+		},
+		Webhooks: webhooks,
+	}
+	return &cfgraw
 }
 
 func getEmptySecret(sec string, ns string) *corev1.Secret {

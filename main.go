@@ -37,6 +37,8 @@ import (
 	// https://github.com/mattbaird/jsonpatch
 )
 
+const Version string = "1.1"
+
 var (
 	certFile string = "/webhook-server/server-cert-dir/webhook-server-srv.crt"
 	keyFile  string = "/webhook-server/server-cert-dir/webhook-server-srv.key"
@@ -148,7 +150,7 @@ func serveAudit(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	loghub.Out(0, "Webhook Server Node v1", false)
+	loghub.Out(0, "Webhook Server Node v"+Version, false)
 
 	//cli flags for config file path
 	configPath := flag.String("config", "./config.yml", "Path to config file")
